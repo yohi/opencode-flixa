@@ -1,0 +1,35 @@
+{
+  "name": "opencode-flixa",
+  "version": "0.1.0",
+  "description": "OpenCode plugin for Flixa — use Flixa AI models in OpenCode",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun build src/index.ts src/provider.ts --outdir dist --target node --format esm --external @opencode-ai/plugin",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "flixa",
+    "ai"
+  ],
+  "dependencies": {
+    "@ai-sdk/open-responses": "^1.0.8",
+    "@ai-sdk/openai-compatible": "^2.0.37",
+    "@deniai/flixa": "file:../flixa-cli",
+    "@opencode-ai/plugin": "latest",
+    "undici": "^7.24.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  }
+}
