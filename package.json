@@ -24,7 +24,7 @@
   "dependencies": {
     "@ai-sdk/open-responses": "^1.0.8",
     "@ai-sdk/openai-compatible": "^2.0.37",
-    "@deniai/flixa": "file:../flixa-cli",
+    "@deniai/flixa": "latest",
     "@opencode-ai/plugin": "latest",
     "undici": "^7.24.7"
   },
