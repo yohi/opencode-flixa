@@ -145,6 +145,10 @@ export const FlixaPlugin: Plugin = async ({ client }) => {
             delete opts.baseURL;
             providerModified = true;
           }
+          if (opts.url && typeof opts.url === "string" && !opts.url.endsWith("/responses")) {
+            opts.url = `${opts.url.replace(/\/+$/,'')}/responses`;
+            providerModified = true;
+          }
           if (!opts.url) {
              opts.url = normalizedUrl;
              providerModified = true;
