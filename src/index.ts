@@ -42,11 +42,6 @@ function areModelsEqual(a: any, b: any): boolean {
   return JSON.stringify(sortObjectDeep(a)) === JSON.stringify(sortObjectDeep(b));
 }
 
-import { fileURLToPath } from "node:url";
-
-const _filename = fileURLToPath(import.meta.url);
-const _dirname = join(_filename, "..");
-
 export const FlixaPlugin: Plugin = async ({ client }) => {
   // 企業プロキシなどで自己署名証明書による通信エラーが発生するのを防ぐ
   // (特定の環境でのみ有効にするか、provider側で制御するのが望ましいが、OpenCode全体の動作に影響するため一旦残す)
@@ -163,6 +158,7 @@ export const FlixaPlugin: Plugin = async ({ client }) => {
     "shell.env": async (_input, output) => {
       const apiKey = getApiKey();
       if (apiKey) {
+        process.env.FLIXA_API_KEY = apiKey;
         output.env.FLIXA_API_KEY = apiKey;
       }
     },
