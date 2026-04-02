@@ -11,12 +11,12 @@ const OPENCODE_CONFIG_DIR = join(homedir(), ".config", "opencode");
 const OPENCODE_CONFIG_JSON = join(OPENCODE_CONFIG_DIR, "opencode.json");
 const FLIXA_PROVIDER_ID = "flixa";
 
-function readJson(path: string): Record<string, unknown> {
+function readJson(path: string): Record<string, unknown> | null {
   if (!existsSync(path)) return {};
   try {
     return JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
   } catch {
-    return {};
+    return null;
   }
 }
 
@@ -26,10 +26,20 @@ function writeJson(path: string, data: Record<string, unknown>): void {
   writeFileSync(path, JSON.stringify(data, null, 2) + "\n", { mode: 0o600 });
 }
 
-// 決定論的なモデル比較のためのユーティリティ
+// 決定論的なモデル比較のためのユーティリティ（ネストされたプロパティも考慮）
+function sortObjectDeep(obj: any): any {
+  if (obj === null || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(sortObjectDeep);
+  return Object.keys(obj)
+    .sort()
+    .reduce((acc: any, key) => {
+      acc[key] = sortObjectDeep(obj[key]);
+      return acc;
+    }, {});
+}
+
 function areModelsEqual(a: any, b: any): boolean {
-  return JSON.stringify(a, Object.keys(a || {}).sort()) === 
-         JSON.stringify(b, Object.keys(b || {}).sort());
+  return JSON.stringify(sortObjectDeep(a)) === JSON.stringify(sortObjectDeep(b));
 }
 
 import { fileURLToPath } from "node:url";
@@ -40,7 +50,7 @@ const _dirname = join(_filename, "..");
 export const FlixaPlugin: Plugin = async ({ client }) => {
   // 企業プロキシなどで自己署名証明書による通信エラーが発生するのを防ぐ
   // (特定の環境でのみ有効にするか、provider側で制御するのが望ましいが、OpenCode全体の動作に影響するため一旦残す)
-  if (process.env.DISABLE_TLS_VERIFY === "true") {
+  if (process.env.DISABLE_TLS_VERIFY === "true" || process.env.ENABLE_PROXY_INSECURE === "true") {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
   }
 
@@ -66,6 +76,17 @@ export const FlixaPlugin: Plugin = async ({ client }) => {
       }
 
       const config = readJson(OPENCODE_CONFIG_JSON);
+      if (config === null) {
+        await client.app.log({
+          body: {
+            service: "opencode-flixa",
+            level: "warn",
+            message: "Skipping Flixa sync because opencode.json is malformed.",
+          },
+        });
+        return;
+      }
+
       if (typeof config.provider !== "object" || config.provider === null) {
         config.provider = {};
       }
