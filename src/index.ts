@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import type { Plugin } from "@opencode-ai/plugin";
 
@@ -21,7 +21,7 @@ function readJson(path: string): Record<string, unknown> | null {
 }
 
 function writeJson(path: string, data: Record<string, unknown>): void {
-  const dir = join(path, "..");
+  const dir = dirname(path);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(path, JSON.stringify(data, null, 2) + "\n", { mode: 0o600 });
 }
