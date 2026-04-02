@@ -178,6 +178,13 @@ export const FlixaPlugin: Plugin = async ({ client }) => {
           delete output.env.FLIXA_API_KEY;
         }
       } catch (e) {
+        await client.app.log({
+          body: {
+            service: "opencode-flixa",
+            level: "error",
+            message: `Error in shell.env hook: ${e instanceof Error ? e.message : String(e)}`,
+          },
+        });
         delete process.env.FLIXA_API_KEY;
         delete output.env.FLIXA_API_KEY;
       }
