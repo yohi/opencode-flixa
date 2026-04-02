@@ -1,33 +1,50 @@
 import { createOpenResponses } from "@ai-sdk/open-responses";
 import { setGlobalDispatcher, Agent, fetch as undiciFetch } from "undici";
-import { getApiKey } from "../../flixa-cli/src/auth/service.js";
+import { getApiKey } from "@deniai/flixa/auth/service";
 import https from "node:https";
 
-const agentArgs = { connect: { rejectUnauthorized: false } };
+export interface CreateProviderOptions {
+  baseURL?: string;
+  apiKey?: string;
+}
 
+// TLS検証を無効化するかどうかの判定
+const disableTlsVerify = process.env.DISABLE_TLS_VERIFY === "true" || process.env.ENABLE_PROXY_INSECURE === "true";
+
+// 共通のエージェント設定
+const agentArgs = { 
+  connect: { 
+    rejectUnauthorized: !disableTlsVerify 
+  } 
+};
+
+// Undiciのグローバルディスパッチャー設定 (一度だけ実行)
+let sharedAgent: Agent | undefined;
 try {
-  setGlobalDispatcher(new Agent(agentArgs));
-} catch (e) {}
+  sharedAgent = new Agent(agentArgs);
+  setGlobalDispatcher(sharedAgent);
+} catch (e) {
+  console.error("Failed to initialize global Undici Agent:", e);
+}
 
-// HTTPS用のエージェントも念のため設定 (Node.jsのネイティブモジュール用)
-const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+// HTTPS用のエージェントも再利用 (Node.jsのネイティブモジュール用)
+const sharedHttpsAgent = new https.Agent({ 
+  rejectUnauthorized: !disableTlsVerify 
+});
 
 const customFetch = async (input: string | URL | Request, init?: RequestInit) => {
   const options: RequestInit & { dispatcher?: any, agent?: any } = { ...init };
   
-  if (typeof Agent !== 'undefined') {
-      try {
-          options.dispatcher = new Agent(agentArgs);
-          options.agent = httpsAgent; // Some fetch polyfills use node-fetch and require `agent`
-      } catch(e) {}
+  if (sharedAgent) {
+    options.dispatcher = sharedAgent;
   }
+  options.agent = sharedHttpsAgent;
   
-  // Use pure undici fetch instead of global which might be heavily patched
+  // Use pure undici fetch
   return undiciFetch(input as any, options as any);
 };
 
-export const createProvider = (options: any = {}) => {
-  // api.flixa.engineer/v1/agent requires /responses for open-responses
+export const createProvider = (options: CreateProviderOptions = {}) => {
   const baseUrl = options.baseURL || "https://api.flixa.engineer/v1/agent";
   const url = baseUrl.endsWith("/responses") ? baseUrl : `${baseUrl}/responses`;
   const apiKey = options.apiKey || process.env.FLIXA_API_KEY || getApiKey();

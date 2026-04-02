@@ -8,7 +8,11 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@deniai/flixa/*": ["../flixa-cli/src/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "test-provider.ts", "test_plugin.ts"]
 }

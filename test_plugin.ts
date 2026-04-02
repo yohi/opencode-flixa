@@ -1,5 +1,15 @@
 import type { Plugin } from "@opencode-ai/plugin";
-const p: Plugin = async ({ client }) => {
-  console.log(Object.keys(client));
-  return {};
+
+/**
+ * A test plugin instance to verify OpenCode plugin host client.
+ */
+export const FlixaTestPlugin: Plugin = async ({ client }) => {
+  console.log("Client keys:", Object.keys(client));
+  return {
+    "shell.env": async () => {
+       // Example environment injection
+    }
+  };
 };
+
+export default FlixaTestPlugin;
