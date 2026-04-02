@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import https from "node:https";
 import type { Plugin } from "@opencode-ai/plugin";
 
 // @deniai/flixa (local package) からインポートするように修正
@@ -43,12 +44,6 @@ function areModelsEqual(a: any, b: any): boolean {
 }
 
 export const FlixaPlugin: Plugin = async ({ client }) => {
-  // 企業プロキシなどで自己署名証明書による通信エラーが発生するのを防ぐ
-  // (特定の環境でのみ有効にするか、provider側で制御するのが望ましいが、OpenCode全体の動作に影響するため一旦残す)
-  if (process.env.DISABLE_TLS_VERIFY === "true" || process.env.ENABLE_PROXY_INSECURE === "true") {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-  }
-
   // Background initialization
   (async () => {
     try {
@@ -64,7 +59,11 @@ export const FlixaPlugin: Plugin = async ({ client }) => {
         return;
       }
 
-      const modelsDef = await fetchAvailableModels({ apiKey });
+      // 企業プロキシなどで自己署名証明書による通信エラーが発生するのを防ぐ
+      const disableTlsVerify = process.env.DISABLE_TLS_VERIFY === "true" || process.env.ENABLE_PROXY_INSECURE === "true";
+      const agent = new https.Agent({ rejectUnauthorized: !disableTlsVerify });
+
+      const modelsDef = await fetchAvailableModels({ apiKey, agent: agent as any });
       const modelsMap: Record<string, { name: string }> = {};
       for (const m of modelsDef) {
         modelsMap[m.id] = { name: m.label || m.id };
@@ -82,19 +81,22 @@ export const FlixaPlugin: Plugin = async ({ client }) => {
         return;
       }
 
-      if (typeof config.provider !== "object" || config.provider === null) {
+      if (typeof config.provider !== "object" || config.provider === null || Array.isArray(config.provider)) {
         config.provider = {};
       }
       
       const provider = config.provider as Record<string, unknown>;
       let currentFlixa = provider[FLIXA_PROVIDER_ID] as Record<string, any> | undefined;
 
-      if (!currentFlixa || typeof currentFlixa !== "object") {
+      const normalizedUrl = DEFAULT_FLIXA_BASE_URL.endsWith("/responses") ? DEFAULT_FLIXA_BASE_URL : `${DEFAULT_FLIXA_BASE_URL}/responses`;
+      const targetNpm = "@ai-sdk/open-responses";
+
+      if (!currentFlixa || typeof currentFlixa !== "object" || Array.isArray(currentFlixa)) {
         currentFlixa = {
           api: "responses",
-          npm: "@ai-sdk/open-responses",
+          npm: targetNpm,
           options: {
-            url: DEFAULT_FLIXA_BASE_URL.endsWith("/responses") ? DEFAULT_FLIXA_BASE_URL : `${DEFAULT_FLIXA_BASE_URL}/responses`,
+            url: normalizedUrl,
           },
           models: modelsMap,
         };
@@ -123,20 +125,30 @@ export const FlixaPlugin: Plugin = async ({ client }) => {
           });
         }
 
-        const targetNpm = "@ai-sdk/open-responses";
+        if (currentFlixa.api !== "responses") {
+          currentFlixa.api = "responses";
+          providerModified = true;
+        }
+
         if (currentFlixa.npm !== targetNpm) {
           currentFlixa.npm = targetNpm;
           providerModified = true;
         }
-        
-        // Migrate baseURL to url for open-responses
-        if (currentFlixa.options && typeof currentFlixa.options === "object") {
-           const opts = currentFlixa.options as Record<string, any>;
-           if (opts.baseURL && !opts.url) {
-              opts.url = opts.baseURL.endsWith("/responses") ? opts.baseURL : `${opts.baseURL}/responses`;
-              delete opts.baseURL;
-              providerModified = true;
-           }
+
+        if (typeof currentFlixa.options !== "object" || currentFlixa.options === null || Array.isArray(currentFlixa.options)) {
+          currentFlixa.options = { url: normalizedUrl };
+          providerModified = true;
+        } else {
+          const opts = currentFlixa.options as Record<string, any>;
+          if (opts.baseURL && !opts.url) {
+            opts.url = opts.baseURL.endsWith("/responses") ? opts.baseURL : `${opts.baseURL}/responses`;
+            delete opts.baseURL;
+            providerModified = true;
+          }
+          if (!opts.url) {
+             opts.url = normalizedUrl;
+             providerModified = true;
+          }
         }
 
         if (providerModified) {
@@ -156,11 +168,20 @@ export const FlixaPlugin: Plugin = async ({ client }) => {
 
   return {
     "shell.env": async (_input, output) => {
-      const apiKey = getApiKey();
-      if (apiKey) {
-        process.env.FLIXA_API_KEY = apiKey;
-        output.env.FLIXA_API_KEY = apiKey;
+      try {
+        const apiKey = getApiKey();
+        if (apiKey) {
+          process.env.FLIXA_API_KEY = apiKey;
+          output.env.FLIXA_API_KEY = apiKey;
+        } else {
+          delete process.env.FLIXA_API_KEY;
+          delete output.env.FLIXA_API_KEY;
+        }
+      } catch (e) {
+        delete process.env.FLIXA_API_KEY;
+        delete output.env.FLIXA_API_KEY;
       }
     },
   };
 };
+
